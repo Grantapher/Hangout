@@ -1,5 +1,7 @@
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.BufferedReader;
@@ -10,6 +12,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.util.HashSet;
+import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
@@ -23,6 +26,7 @@ public class ChatServer {
 	private static String roomName;
 	private static JTextArea text;
 	private static int number = 0;
+	private static boolean closed;
 	
 	public static void main(String[] args) throws Exception {
 		javax.swing.UIManager.setLookAndFeel(javax.swing.UIManager
@@ -42,6 +46,15 @@ public class ChatServer {
 		frame.setMinimumSize(new Dimension(384, 288));
 		frame.setLocationRelativeTo(null);
 		frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+		final JButton button = new JButton("Close");
+		frame.add(button, BorderLayout.SOUTH);
+		button.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				if(!closed)
+					attemptClose(frame, listener, button);
+			}
+		});
 		text.setLineWrap(true);
 		text.setWrapStyleWord(true);
 		text.setBackground(null);
@@ -52,17 +65,8 @@ public class ChatServer {
 		frame.addWindowListener(new WindowAdapter() {
 			@Override
 			public void windowClosing(WindowEvent e) {
-				try {
-					if(JOptionPane.showConfirmDialog(frame,
-							"Are you sure you want to exit?", "Exit",
-							JOptionPane.YES_NO_CANCEL_OPTION,
-							JOptionPane.QUESTION_MESSAGE) != JOptionPane.YES_OPTION)
-						return;
-					listener.close();
-				}
-				catch(IOException e1) {
-					log("listener didn't close" + e);
-				}
+				if(!closed)
+					attemptClose(frame, listener, button);
 				System.exit(0);
 			}
 		});
@@ -76,6 +80,25 @@ public class ChatServer {
 		catch(SocketException e) {}
 		finally {
 			listener.close();
+		}
+	}
+	
+	static void attemptClose(JFrame frame, ServerSocket listener,
+			JButton button) {
+		try {
+			if(JOptionPane.showConfirmDialog(frame,
+					"Are you sure you want to close the connection?",
+					"Connection Closing",
+					JOptionPane.YES_NO_CANCEL_OPTION,
+					JOptionPane.QUESTION_MESSAGE) != JOptionPane.YES_OPTION)
+				return;
+			listener.close();
+			log("Connection Closed");
+			closed = true;
+			button.setEnabled(false);
+		}
+		catch(IOException e) {
+			log("listener didn't close" + e);
 		}
 	}
 	
