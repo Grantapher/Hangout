@@ -13,6 +13,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.URL;
+import java.util.ConcurrentModificationException;
 import java.util.HashSet;
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -26,11 +27,14 @@ public class ChatServer {
 	private static final int PORT = 9898;
 	private static HashSet<String> names = new HashSet<String>();
 	private static HashSet<PrintWriter> writers = new HashSet<PrintWriter>();
+	private static HashSet<Socket> sockets = new HashSet<Socket>();
 	private static String roomName;
 	private static JTextArea text;
 	private static int number = 0;
 	private static boolean closed;
 	private static JTextField field;
+	private static JButton button;
+	private static JFrame frame;
 	
 	public static void main(String[] args) throws Exception {
 		javax.swing.UIManager.setLookAndFeel(javax.swing.UIManager
@@ -44,13 +48,13 @@ public class ChatServer {
 		//initialize socket
 		final ServerSocket listener = new ServerSocket(PORT);
 		//initialize gui
-		final JFrame frame = new JFrame("Log of " + roomName);
+		frame = new JFrame("Log of " + roomName);
 		text = new JTextArea();
 		frame.add(new JScrollPane(text), BorderLayout.CENTER);
 		frame.setMinimumSize(new Dimension(384, 288));
 		frame.setLocationRelativeTo(null);
 		frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-		final JButton button = new JButton("Close");
+		button = new JButton("Close");
 		frame.add(button, BorderLayout.EAST);
 		field = new JTextField();
 		frame.add(field, BorderLayout.SOUTH);
@@ -59,26 +63,40 @@ public class ChatServer {
 			public void actionPerformed(ActionEvent e) {
 				String input = field.getText();
 				field.setText("");
-				if(input.length() < 4)
+				if(input.length() < 4) {
+					text.append("The command \"" + input
+							+ "\" is not recognized.\n");
 					return;
-				else if(input.substring(0, 4).equalsIgnoreCase(
+				}
+				if(input.substring(0, 4).equalsIgnoreCase(
 						new String("list"))) {
-					text.append("\nCurrently in the chat:");
+					text.append("\nCurrently in the chat:\n");
 					for(String name : names) {
 						text.append(name + "\n");
 					}
-					text.append("\n\n");
+					text.append("\n");
 					return;
-				} else
+				}
+				if(input.length() < 10) {
 					text.append("The command \"" + input
 							+ "\" is not recognized.\n");
+					return;
+				}
+				if(input.substring(0, 10).equalsIgnoreCase("broadcast ")) {
+					for(PrintWriter writer : writers) {
+						writer.println("SERVER>" + input.substring(9));
+					}
+					return;
+				}
+				text.append("The command \"" + input
+						+ "\" is not recognized.\n");
 			}
 		});
 		button.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				if(!closed)
-					attemptClose(frame, listener, button);
+					attemptClose(listener);
 			}
 		});
 		text.setLineWrap(true);
@@ -92,7 +110,7 @@ public class ChatServer {
 			@Override
 			public void windowClosing(WindowEvent e) {
 				if(!closed)
-					attemptClose(frame, listener, button);
+					attemptClose(listener);
 				System.exit(0);
 			}
 		});
@@ -129,8 +147,7 @@ public class ChatServer {
 		}
 	}
 	
-	static void attemptClose(JFrame frame, ServerSocket listener,
-			JButton button) {
+	static void attemptClose(ServerSocket listener) {
 		try {
 			if(JOptionPane.showConfirmDialog(frame,
 					"Are you sure you want to close the connection?",
@@ -139,12 +156,48 @@ public class ChatServer {
 					JOptionPane.QUESTION_MESSAGE) != JOptionPane.YES_OPTION)
 				return;
 			listener.close();
-			log("Connection Closed");
 			closed = true;
 			button.setEnabled(false);
+			field.setEnabled(false);
+			// This client is going down!  Remove its name and its print
+			// writer from the sets, and close its socket.
+			for(PrintWriter writer : writers) {
+				writer.println("SERVER> Shutting down.");
+			}
+			try {
+				synchronized(sockets) {
+					for(Socket socket : sockets) {
+						socket.close();
+					}
+				}
+			}
+			catch(IOException e) {
+				log("A socket didn't close." + e);
+			}
+			synchronized(names) {
+				for(String name : names) {
+					if(name != null) {
+						names.remove(name);
+					}
+				}
+			}
+			synchronized(writers) {
+				for(PrintWriter out : writers) {
+					if(out != null) {
+						writers.remove(out);
+					}
+				}
+			}
 		}
 		catch(IOException e) {
 			log("listener didn't close" + e);
+		}
+		catch(ConcurrentModificationException e) {}
+		catch(Exception e) {
+			log(e.toString());
+		}
+		finally {
+			log("Connection Closed");
 		}
 	}
 	
@@ -164,6 +217,7 @@ public class ChatServer {
 		
 		public void run() {
 			try {
+				sockets.add(socket);
 				// Create character streams for the socket.
 				in = new BufferedReader(new InputStreamReader(
 						socket.getInputStream()));
@@ -174,18 +228,21 @@ public class ChatServer {
 				// must be done while locking the set of names.
 				out.println(roomName);
 				while(true) {
-					out.println("Identify yourself!");
+					out.println("What is your name?");
 					name = in.readLine();
 					if(name == null) {
 						return;
 					}
-					synchronized(names) {
-						if(!names.contains(name)) {
-							names.add(name);
-							break;
+					if(name.length() <= 18) {
+						synchronized(names) {
+							if(!names.contains(name)) {
+								names.add(name);
+								break;
+							}
 						}
-					}
-					out.println("Name is already taken.");
+						out.println("Name is already taken.");
+					} else
+						out.println("Name must be 18 characters or less.");
 				}
 				log("Client #" + number + " has identified as: \"" + name
 						+ "\"");
@@ -220,6 +277,7 @@ public class ChatServer {
 					}
 				}
 			}
+			catch(SocketException e) {}
 			catch(IOException e) {
 				log("Client #" + number + " (" + name + ") "
 						+ e.toString());
@@ -227,14 +285,13 @@ public class ChatServer {
 			finally {
 				// This client is going down!  Remove its name and its print
 				// writer from the sets, and close its socket.
-				if(name != null) {
+				if(name != null)
 					names.remove(name);
-				}
-				if(out != null) {
+				if(out != null)
 					writers.remove(out);
-				}
 				try {
-					socket.close();
+					if(!socket.isClosed())
+						socket.close();
 					log("Connection with client #" + number + " (" + name
 							+ ")" + " has closed.");
 				}

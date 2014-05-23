@@ -95,8 +95,8 @@ public class ChatClient {
 	private String getIdentity() {
 		String identity;
 		if((identity = JOptionPane.showInputDialog(null,
-				"Identify yourself!", "Identity",
-				JOptionPane.PLAIN_MESSAGE)) != null)
+				"What is your name?", "Identity",
+				JOptionPane.QUESTION_MESSAGE)) != null)
 			return identity;
 		System.exit(0);
 		return null;
