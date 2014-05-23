@@ -19,6 +19,7 @@ import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
+import javax.swing.JTextField;
 import javax.swing.text.DefaultCaret;
 
 public class ChatServer {
@@ -29,6 +30,7 @@ public class ChatServer {
 	private static JTextArea text;
 	private static int number = 0;
 	private static boolean closed;
+	private static JTextField field;
 	
 	public static void main(String[] args) throws Exception {
 		javax.swing.UIManager.setLookAndFeel(javax.swing.UIManager
@@ -49,7 +51,29 @@ public class ChatServer {
 		frame.setLocationRelativeTo(null);
 		frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
 		final JButton button = new JButton("Close");
-		frame.add(button, BorderLayout.SOUTH);
+		frame.add(button, BorderLayout.EAST);
+		field = new JTextField();
+		frame.add(field, BorderLayout.SOUTH);
+		field.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				String input = field.getText();
+				field.setText("");
+				if(input.length() < 4)
+					return;
+				else if(input.substring(0, 4).equalsIgnoreCase(
+						new String("list"))) {
+					text.append("\nCurrently in the chat:");
+					for(String name : names) {
+						text.append(name + "\n");
+					}
+					text.append("\n\n");
+					return;
+				} else
+					text.append("The command \"" + input
+							+ "\" is not recognized.\n");
+			}
+		});
 		button.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -80,7 +104,12 @@ public class ChatServer {
 			ipAddress = in.readLine();
 		}
 		catch(Exception e) {}
-		if(ipAddress != null)
+		if(InetAddress.getLocalHost().getHostAddress().trim()
+				.equals("127.0.0.1"))
+			text.append(roomName + " is running at "
+					+ InetAddress.getLocalHost().getHostAddress()
+					+ " locally!\n");
+		else if(ipAddress != null)
 			text.append(roomName + " is running at "
 					+ InetAddress.getLocalHost().getHostAddress()
 					+ " internally and " + ipAddress + " externally!\n");
