@@ -5,25 +5,17 @@ import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
-import javax.swing.ImageIcon;
-import javax.swing.JFileChooser;
 import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.JLayeredPane;
 import javax.swing.JOptionPane;
-import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.text.DefaultCaret;
 
-@SuppressWarnings("unused")
 public class ChatClient {
 	private PrintWriter out;
 	private static BufferedReader in;
@@ -32,8 +24,6 @@ public class ChatClient {
 	private JTextArea messageArea = new JTextArea(8, 30);
 	private Socket socket;
 	private String identity;
-	private ImageIcon image;
-	private JLabel background;
 	private static boolean closed;
 	
 	public ChatClient() {

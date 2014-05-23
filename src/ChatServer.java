@@ -8,9 +8,11 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import java.net.URL;
 import java.util.HashSet;
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -70,7 +72,22 @@ public class ChatServer {
 				System.exit(0);
 			}
 		});
-		text.append(roomName + " is running!\n");
+		URL myIP = new URL("http://www.trackip.net/ip");
+		String ipAddress = null;
+		try {
+			BufferedReader in = new BufferedReader(new InputStreamReader(
+					myIP.openStream()));
+			ipAddress = in.readLine();
+		}
+		catch(Exception e) {}
+		if(ipAddress != null)
+			text.append(roomName + " is running at "
+					+ InetAddress.getLocalHost().getHostAddress()
+					+ " internally and " + ipAddress + " externally!\n");
+		else
+			text.append(roomName + " is running at "
+					+ InetAddress.getLocalHost().getHostAddress()
+					+ " internally!\n");
 		frame.setVisible(true);
 		try {
 			while(true) {
