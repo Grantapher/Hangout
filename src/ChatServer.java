@@ -14,7 +14,6 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.SocketException;
 import java.net.URL;
-import java.util.ConcurrentModificationException;
 import java.util.Vector;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
@@ -106,7 +105,8 @@ public class ChatServer {
 		closeButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				attemptClose(listener);
+				if(attemptClose(listener))
+					log("Connection Closed.\n");
 			}
 		});
 		commandPan.add(closeButton);
@@ -159,7 +159,7 @@ public class ChatServer {
 			return;
 		synchronized(handlers) {
 			for(Handler handler : handlers) {
-				handler.getWriter().println("SERVER>" + input);
+				handler.getWriter().println("SERVER> " + input);
 			}
 		}
 		return;
@@ -167,20 +167,24 @@ public class ChatServer {
 	
 	private void showList() {
 		if(handlers.isEmpty()) {
-			text.append("\nThe chat is currently empty.\n");
+			log("\nThe chat is currently empty.");
 			return;
 		}
-		text.append("\nCurrently in the chat:\n");
+		log("\nCurrently in the chat:");
 		synchronized(handlers) {
 			for(Handler handler : handlers) {
-				text.append("\"" + handler.getIdentity() + "\"\n");
+				log("\"" + handler.getIdentity() + "\"");
 			}
 		}
-		text.append("\n");
+		log();
 		return;
 	}
 	
 	private static void kick(Handler handler) {
+		if(JOptionPane.showConfirmDialog(frame,
+				"Are you sure you want to kick \"" + handler + "\"?",
+				"Kick " + handler + "?", JOptionPane.YES_NO_OPTION) == JOptionPane.NO_OPTION)
+			return;
 		handler.getWriter().println("SERVER> You have been kicked.");
 		handler.close();
 		destroy(handler);
@@ -230,19 +234,21 @@ public class ChatServer {
 		}
 		catch(IOException e) {
 			log("listener didn't close" + e);
-		}
-		catch(ConcurrentModificationException e) {
-			e.printStackTrace();
+			return false;
 		}
 		catch(Exception e) {
 			log(e.toString());
+			return false;
 		}
-		log("Connection Closed\n");
 		return true;
 	}
 	
 	public static void log(String string) {
 		text.append(string + "\n");
+	}
+	
+	public static void log() {
+		text.append("\n");
 	}
 	
 	public static void main(String[] args) throws Exception {
@@ -280,16 +286,18 @@ public class ChatServer {
 		}
 		if(InetAddress.getLocalHost().getHostAddress().trim()
 				.equals("127.0.0.1"))
-			text.append(roomName + " is running internally at:\n"
-					+ InetAddress.getLocalHost().getHostAddress().trim()
-					+ "\n");
+			log(roomName + " is running internally at:\n"
+					+ InetAddress.getLocalHost().getHostAddress().trim());
 		else if(ipAddress != null)
-			text.append(roomName + " is running locally at:\n"
+			log(roomName + " is running locally at:\n"
 					+ InetAddress.getLocalHost().getHostAddress().trim()
-					+ "\nand on the internet at:\n" + ipAddress + "\n");
+					+ "\nand on the internet at:\n" + ipAddress
+					+ "\n\nNote: To recieve connections from the internet"
+					+ " IP, you must forward Port 9898 to redirect"
+					+ " connections from the internet here.\n");
 		else
-			text.append(roomName + " is running locally at\n"
-					+ InetAddress.getLocalHost().getHostAddress() + "\n");
+			log(roomName + " is running locally at\n"
+					+ InetAddress.getLocalHost().getHostAddress());
 		frame.setVisible(true);
 		try {
 			while(true) {
