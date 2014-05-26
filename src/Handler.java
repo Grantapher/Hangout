@@ -1,6 +1,7 @@
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.net.SocketException;
@@ -18,25 +19,25 @@ public class Handler extends Thread {
 		this.roomName = roomName;
 		this.socket = socket;
 		this.number = number;
-		log("New connection at " + socket);
-		log("Connected to client #" + number + ".");
+		log("Connected to client #" + number + " at " + socket);
 	}
 	
 	public void run() {
 		try {
 			// Create character streams for the socket.
 			in = new BufferedReader(new InputStreamReader(
-					socket.getInputStream()));
-			out = new PrintWriter(socket.getOutputStream(), true);
+					socket.getInputStream(), "UTF-16"));
+			out = new PrintWriter(new OutputStreamWriter(
+					socket.getOutputStream(), "UTF-16"), true);
 			// Request a name from this client.  Keep requesting until
 			// a name is submitted that is not already used.  Note that
 			// checking for the existence of a name and adding the name
 			// must be done while locking the set of names.
-			out.println(ChatServer.roomName);
+			printlnHere(ChatServer.roomName);
 			String tempIdentity = null;
 			while(true) {
 				nameAccepted = true;
-				out.println("What is your name?");
+				printlnHere("What is your name?");
 				tempIdentity = in.readLine();
 				if(tempIdentity == null) {
 					return;
@@ -55,16 +56,16 @@ public class Handler extends Thread {
 							break;
 						}
 					}
-					out.println("Name is already taken.");
+					printlnHere("Name is already taken.");
 				} else
-					out.println("Name must be 18 characters or less.");
+					printlnHere("Name must be 18 characters or less.");
 			}
 			log("Client #" + number + " has identified as: \"" + identity
 					+ "\"");
 			// Now that a successful name has been chosen, add the
 			// socket's print writer to the set of all writers so
 			// this client can receive broadcast messages.
-			out.println("Welcome to " + roomName + ", " + identity + "!");
+			printlnHere("Welcome to " + roomName + ", " + identity + "!");
 			println(identity + " has entered the room.");
 			// Accept messages from this client and broadcast them.
 			// Ignore other clients that cannot be broadcasted to.
@@ -75,13 +76,13 @@ public class Handler extends Thread {
 					return;
 				}
 				if(input.equals("!list")) {
-					out.println("\nCurrently in the chat:");
+					printlnHere("\nCurrently in the chat:");
 					synchronized(ChatServer.handlers) {
 						for(Handler handler : ChatServer.handlers) {
-							out.println(handler.getIdentity());
+							printlnHere(handler.getIdentity());
 						}
 					}
-					out.println();
+					printlnHere("");
 				} else {
 					println(getIdentity() + "> " + input);
 				}
@@ -96,6 +97,10 @@ public class Handler extends Thread {
 			if(!socket.isClosed())
 				close();
 		}
+	}
+	
+	private void printlnHere(String string) {
+		out.println(string);
 	}
 	
 	private static void log(String string) {
@@ -130,5 +135,9 @@ public class Handler extends Thread {
 			log("Client #" + number + "'s (" + identity + "'s)"
 					+ " socket didn't close." + e);
 		}
+	}
+	
+	public String toString() {
+		return identity;
 	}
 }

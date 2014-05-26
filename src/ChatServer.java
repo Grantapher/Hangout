@@ -1,5 +1,8 @@
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.EventQueue;
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
@@ -12,128 +15,39 @@ import java.net.ServerSocket;
 import java.net.SocketException;
 import java.net.URL;
 import java.util.ConcurrentModificationException;
-import java.util.HashSet;
+import java.util.Vector;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JOptionPane;
+import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
-import javax.swing.JTextField;
+import javax.swing.UIManager;
+import javax.swing.border.EmptyBorder;
 import javax.swing.text.DefaultCaret;
 
 public class ChatServer {
+	public static Vector<Handler> handlers = new Vector<Handler>();
+	public static String roomName;
 	private static final int PORT = 9898;
-	protected static HashSet<Handler> handlers = new HashSet<Handler>();
-	protected static String roomName;
 	private static JTextArea text;
 	private static int number = 0;
 	private static boolean closed;
-	private static JTextField field;
-	private static JButton button;
+	private static JButton closeButton;
+	private static JButton kickButton;
+	private static JComboBox<Handler> comboBox;
 	private static JFrame frame;
+	private static ServerSocket listener;
+	private static JPanel contentPane;
+	private static JButton listButton;
+	private static JButton castButton;
+	private static Handler temp;
 	
-	public static void main(String[] args) throws Exception {
-		javax.swing.UIManager.setLookAndFeel(javax.swing.UIManager
-				.getSystemLookAndFeelClassName());
-		//get roomName
-		if((roomName = JOptionPane.showInputDialog(null,
-				"What is the name of the chatroom?", "Name",
-				JOptionPane.QUESTION_MESSAGE)) == null)
-			System.exit(0);
-		roomName = "Chatroom: " + roomName;
-		//initialize socket
-		final ServerSocket listener = new ServerSocket(PORT);
-		//initialize gui
+	public ChatServer() {
 		frame = new JFrame("Log of " + roomName);
-		text = new JTextArea();
-		frame.add(new JScrollPane(text), BorderLayout.CENTER);
-		frame.setMinimumSize(new Dimension(384, 288));
-		frame.setLocationRelativeTo(null);
-		frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-		button = new JButton("Close");
-		frame.add(button, BorderLayout.EAST);
-		field = new JTextField();
-		frame.add(field, BorderLayout.SOUTH);
-		field.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				String input = field.getText();
-				field.setText("");
-				if(input.length() < 4) {
-					text.append("The command \"" + input
-							+ "\" is not recognized.\n");
-					return;
-				}
-				if(input.substring(0, 4).equalsIgnoreCase("list")) {
-					text.append("\nCurrently in the chat:\n");
-					synchronized(ChatServer.handlers) {
-						for(Handler handler : handlers) {
-							text.append("\"" + handler.getIdentity()
-									+ "\"\n");
-						}
-					}
-					text.append("\n");
-					return;
-				}
-				if(input.length() < 5) {
-					text.append("The command \"" + input
-							+ "\" is not recognized.\n");
-					return;
-				}
-				if(input.substring(0, 5).equalsIgnoreCase("kick ")) {
-					String tempIdentity = input.substring(5);
-					synchronized(ChatServer.handlers) {
-						for(Handler handler : handlers) {
-							if(handler.getIdentity().equals(tempIdentity)) {
-								handler.getWriter().println(
-										"SERVER> You have been kicked.");
-								handler.close();
-								handlers.remove(handler);
-								for(Handler handler1 : handlers) {
-									handler1.getWriter().println(
-											"SERVER> " + tempIdentity
-													+ " has been kicked.");
-								}
-								log(tempIdentity + " has been kicked.\n");
-								return;
-							}
-						}
-					}
-					text.append("The name \"" + tempIdentity
-							+ "\" is not in the chatroom.\n");
-					return;
-				}
-				if(input.length() < 10) {
-					text.append("The command \"" + input
-							+ "\" is not recognized.\n");
-					return;
-				}
-				if(input.substring(0, 10).equalsIgnoreCase("broadcast ")) {
-					synchronized(ChatServer.handlers) {
-						for(Handler handler : handlers) {
-							handler.getWriter().println(
-									"SERVER>" + input.substring(9));
-						}
-					}
-					return;
-				}
-				text.append("The command \"" + input
-						+ "\" is not recognized.\n");
-			}
-		});
-		button.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				attemptClose(listener);
-			}
-		});
-		text.setLineWrap(true);
-		text.setWrapStyleWord(true);
-		text.setBackground(null);
-		text.setBorder(null);
-		text.setEditable(false);
-		DefaultCaret caret = (DefaultCaret) text.getCaret();
-		caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
 		frame.addWindowListener(new WindowAdapter() {
 			@Override
 			public void windowClosing(WindowEvent e) {
@@ -141,43 +55,148 @@ public class ChatServer {
 					System.exit(0);
 			}
 		});
-		URL myIP = new URL("http://www.trackip.net/ip");
-		String ipAddress = null;
-		try {
-			BufferedReader in = new BufferedReader(new InputStreamReader(
-					myIP.openStream()));
-			ipAddress = in.readLine();
-		}
-		catch(Exception e) {}
-		if(InetAddress.getLocalHost().getHostAddress().trim()
-				.equals("127.0.0.1"))
-			text.append(roomName + " is running at "
-					+ InetAddress.getLocalHost().getHostAddress()
-					+ " locally!\n");
-		else if(ipAddress != null)
-			text.append(roomName + " is running at "
-					+ InetAddress.getLocalHost().getHostAddress()
-					+ " internally and " + ipAddress + " externally!\n");
-		else
-			text.append(roomName + " is running at "
-					+ InetAddress.getLocalHost().getHostAddress()
-					+ " internally!\n");
-		frame.setVisible(true);
-		try {
-			Handler temp = null;
-			while(true) {
-				temp = new Handler(listener.accept(), number++, roomName);
-				handlers.add(temp);
-				temp.start();
+		frame.setMinimumSize(new Dimension(384, 288));
+		frame.setPreferredSize(new Dimension(768, 576));
+		frame.setLocationRelativeTo(null);
+		frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+		
+		contentPane = new JPanel();
+		contentPane.setLayout(new BorderLayout(0, 0));
+		frame.setContentPane(contentPane);
+		
+		text = new JTextArea();
+		text.setLineWrap(true);
+		text.setWrapStyleWord(true);
+		text.setBackground(null);
+		text.setBorder(null);
+		text.setEditable(false);
+		contentPane.add(new JScrollPane(text), BorderLayout.CENTER);
+		
+		DefaultCaret caret = (DefaultCaret) text.getCaret();
+		caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
+		
+		JPanel eastPan = new JPanel();
+		eastPan.setLayout(new BorderLayout(0, 0));
+		eastPan.setBorder(new EmptyBorder(5, 5, 5, 5));
+		contentPane.add(eastPan, BorderLayout.EAST);
+		
+		JPanel commandPan = new JPanel();
+		commandPan.setLayout(new BoxLayout(commandPan, BoxLayout.Y_AXIS));
+		eastPan.add(commandPan, BorderLayout.SOUTH);
+		
+		JLabel lblCommands = new JLabel("Commands:");
+		lblCommands.setAlignmentX(Component.CENTER_ALIGNMENT);
+		commandPan.add(lblCommands);
+		
+		JPanel userPan = new JPanel();
+		userPan.setLayout(new BoxLayout(userPan, BoxLayout.Y_AXIS));
+		eastPan.add(userPan, BorderLayout.NORTH);
+		
+		JLabel lblPerson = new JLabel("Name:");
+		lblPerson.setAlignmentX(Component.CENTER_ALIGNMENT);
+		userPan.add(lblPerson);
+		
+		comboBox = new JComboBox<Handler>(handlers);
+		comboBox.setAlignmentX(Component.CENTER_ALIGNMENT);
+		comboBox.setPreferredSize(new Dimension(89, 20));
+		userPan.add(comboBox);
+		
+		closeButton = new JButton("Close");
+		closeButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+		closeButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				attemptClose(listener);
 			}
-		}
-		catch(SocketException e) {}
-		finally {
-			listener.close();
-		}
+		});
+		commandPan.add(closeButton);
+		
+		listButton = new JButton("List");
+		listButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+		listButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				showList();
+			}
+		});
+		commandPan.add(listButton);
+		
+		castButton = new JButton("Broadcast");
+		castButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+		castButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				broadcast();
+			}
+		});
+		commandPan.add(castButton);
+		
+		kickButton = new JButton("Kick");
+		kickButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+		kickButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				if(comboBox.getSelectedItem() == null) {
+					Toolkit.getDefaultToolkit().beep();
+					return;
+				}
+				kick((Handler) comboBox.getSelectedItem());
+				comboBox.setSelectedIndex(-1);
+			}
+		});
+		userPan.add(kickButton);
+		
+		frame.setVisible(true);
 	}
 	
-	static boolean attemptClose(ServerSocket listener) {
+	private void broadcast() {
+		String input = JOptionPane.showInputDialog(frame,
+				"What would you like to broadcast to " + roomName + "?",
+				"Broadcast", JOptionPane.PLAIN_MESSAGE);
+		if(input == null)
+			return;
+		if((input.equals("")))
+			return;
+		synchronized(handlers) {
+			for(Handler handler : handlers) {
+				handler.getWriter().println("SERVER>" + input);
+			}
+		}
+		return;
+	}
+	
+	private void showList() {
+		if(handlers.isEmpty()) {
+			text.append("\nThe chat is currently empty.\n");
+			return;
+		}
+		text.append("\nCurrently in the chat:\n");
+		synchronized(handlers) {
+			for(Handler handler : handlers) {
+				text.append("\"" + handler.getIdentity() + "\"\n");
+			}
+		}
+		text.append("\n");
+		return;
+	}
+	
+	private static void kick(Handler handler) {
+		handler.getWriter().println("SERVER> You have been kicked.");
+		handler.close();
+		destroy(handler);
+		for(Handler handler1 : handlers) {
+			handler1.getWriter().println(
+					"SERVER> " + handler + " has been kicked.");
+		}
+		log(handler + " has been kicked.\n");
+	}
+	
+	public static void destroy(final Handler handler) {
+		handlers.remove(handler);
+		comboBox.removeItem(handler);
+	}
+	
+	private static boolean attemptClose(ServerSocket listener) {
 		try {
 			if(JOptionPane.showConfirmDialog(frame,
 					"Are you sure you want to close the connection?",
@@ -187,11 +206,15 @@ public class ChatServer {
 				return false;
 			listener.close();
 			closed = true;
-			button.setEnabled(false);
-			field.setEnabled(false);
+			closeButton.setEnabled(false);
+			kickButton.setEnabled(false);
+			listButton.setEnabled(false);
+			castButton.setEnabled(false);
+			
+			comboBox.setEnabled(false);
 			// This client is going down!  Remove its name and its print
 			// writer from the sets, and close its socket.
-			synchronized(ChatServer.handlers) {
+			synchronized(handlers) {
 				for(Handler handler : handlers) {
 					handler.getWriter().println("SERVER> Shutting down.");
 				}
@@ -202,11 +225,15 @@ public class ChatServer {
 				}
 			}
 			handlers.clear();
+			comboBox.removeAllItems();
+			comboBox.setSelectedIndex(-1);
 		}
 		catch(IOException e) {
 			log("listener didn't close" + e);
 		}
-		catch(ConcurrentModificationException e) {}
+		catch(ConcurrentModificationException e) {
+			e.printStackTrace();
+		}
 		catch(Exception e) {
 			log(e.toString());
 		}
@@ -216,5 +243,65 @@ public class ChatServer {
 	
 	public static void log(String string) {
 		text.append(string + "\n");
+	}
+	
+	public static void main(String[] args) throws Exception {
+		UIManager.setLookAndFeel(javax.swing.UIManager
+				.getSystemLookAndFeelClassName());
+		//get roomName
+		if((roomName = JOptionPane.showInputDialog(null,
+				"What is the name of the chatroom?", "Name",
+				JOptionPane.QUESTION_MESSAGE)) == null)
+			System.exit(0);
+		roomName = "Chatroom: " + roomName;
+		//initialize socket
+		listener = new ServerSocket(PORT);
+		//initialize gui
+		EventQueue.invokeLater(new Runnable() {
+			public void run() {
+				try {
+					new ChatServer();
+				}
+				catch(Exception e) {
+					e.printStackTrace();
+				}
+			}
+		});
+		URL myIP = new URL("http://www.trackip.net/ip");
+		String ipAddress = null;
+		try {
+			BufferedReader in = new BufferedReader(new InputStreamReader(
+					myIP.openStream()));
+			ipAddress = in.readLine();
+			in.close();
+		}
+		catch(Exception e) {
+			e.printStackTrace();
+		}
+		if(InetAddress.getLocalHost().getHostAddress().trim()
+				.equals("127.0.0.1"))
+			text.append(roomName + " is running internally at:\n"
+					+ InetAddress.getLocalHost().getHostAddress().trim()
+					+ "\n");
+		else if(ipAddress != null)
+			text.append(roomName + " is running locally at:\n"
+					+ InetAddress.getLocalHost().getHostAddress().trim()
+					+ "\nand on the internet at:\n" + ipAddress + "\n");
+		else
+			text.append(roomName + " is running locally at\n"
+					+ InetAddress.getLocalHost().getHostAddress() + "\n");
+		frame.setVisible(true);
+		try {
+			while(true) {
+				temp = null;
+				temp = new Handler(listener.accept(), number++, roomName);
+				handlers.add(temp);
+				temp.start();
+			}
+		}
+		catch(SocketException e) {}
+		finally {
+			listener.close();
+		}
 	}
 }

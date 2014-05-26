@@ -1,5 +1,6 @@
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.HeadlessException;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
@@ -7,6 +8,7 @@ import java.awt.event.WindowEvent;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.Socket;
 import javax.swing.JFrame;
@@ -14,12 +16,14 @@ import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.UIManager;
 import javax.swing.text.DefaultCaret;
 
 public class ChatClient {
+	private static final int PORT = 9898;
 	private PrintWriter out;
 	private static BufferedReader in;
-	public JFrame frame = new JFrame("Chat");
+	private JFrame frame = new JFrame("Chat");
 	private JTextField dataField = new JTextField(40);
 	private JTextArea messageArea = new JTextArea(8, 30);
 	private Socket socket;
@@ -42,9 +46,8 @@ public class ChatClient {
 		// Add Listeners
 		dataField.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				String output = dataField.getText();
+				out.println(dataField.getText());
 				dataField.setText("");
-				out.println(output);
 			}
 		});
 		frame.addWindowListener(new WindowAdapter() {
@@ -84,20 +87,27 @@ public class ChatClient {
 				JOptionPane.QUESTION_MESSAGE)) == null)
 			System.exit(0);
 		// Make connection and initialize streams
-		socket = new Socket(serverAddress, 9898);
+		socket = new Socket(serverAddress, PORT);
 		in = new BufferedReader(new InputStreamReader(
-				socket.getInputStream()));
-		out = new PrintWriter(socket.getOutputStream(), true);
+				socket.getInputStream(), "UTF-16"));
+		out = new PrintWriter(new OutputStreamWriter(
+				socket.getOutputStream(), "UTF-16"), true);
 		identity = in.readLine();
 		out.println(getIdentity());
 	}
 	
 	private String getIdentity() {
 		String identity;
-		if((identity = JOptionPane.showInputDialog(null,
-				"What is your name?", "Identity",
-				JOptionPane.QUESTION_MESSAGE)) != null)
-			return identity;
+		try {
+			if((identity = JOptionPane.showInputDialog(null,
+					"What is your name?", "Identity",
+					JOptionPane.QUESTION_MESSAGE)) != null) {
+				return identity;
+			}
+		}
+		catch(HeadlessException e) {
+			e.printStackTrace();
+		}
 		System.exit(0);
 		return null;
 	}
@@ -105,7 +115,7 @@ public class ChatClient {
 	private static class Inbound extends Thread {
 		private Socket socket;
 		private JTextArea textArea;
-		private String identity;
+		private String roomName;
 		private JFrame frame;
 		
 		public Inbound(Socket socket, JTextArea textArea, JFrame frame,
@@ -113,12 +123,12 @@ public class ChatClient {
 			this.socket = socket;
 			this.textArea = textArea;
 			this.frame = frame;
-			this.identity = identity;
+			this.roomName = identity;
 		}
 		
 		public void run() {
 			try {
-				frame.setTitle(identity);
+				frame.setTitle(roomName);
 				in.readLine();
 				while(true) {
 					String input = in.readLine();
@@ -141,7 +151,7 @@ public class ChatClient {
 	}
 	
 	public static void main(String[] args) throws Exception {
-		javax.swing.UIManager.setLookAndFeel(javax.swing.UIManager
+		UIManager.setLookAndFeel(javax.swing.UIManager
 				.getSystemLookAndFeelClassName());
 		new ChatClient();
 	}
